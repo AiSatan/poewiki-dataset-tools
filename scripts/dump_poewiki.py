@@ -2,7 +2,7 @@
 """Dump current PoE Wiki pages to JSONL.
 
 Each output line is:
-{"pageid", "revid", "timestamp", "title", "wikitext"}
+{"pageid", "revid", "timestamp", "title", "wikitext", "summary_text"}
 """
 
 from __future__ import annotations
@@ -206,10 +206,6 @@ def save_cursor(output: Path, value: dict | None) -> None:
     os.replace(tmp_path, path)
 
 
-def summary_output_path(input_path: Path) -> Path:
-    return input_path.with_suffix(".summary" + input_path.suffix)
-
-
 def summarize_wikitext(wikitext: str) -> str:
     parts = []
     if item_fields := extract_item_template_fields(wikitext):
@@ -227,30 +223,6 @@ def summarize_wikitext(wikitext: str) -> str:
     result = HEADING_RE.sub(lambda match: match.group(1), result)
     result = MULTI_NEWLINE_RE.sub("\n\n", result)
     return result.strip()
-
-
-def add_summaries(input_path: Path) -> None:
-    if not input_path.exists():
-        raise RuntimeError(f"{input_path} does not exist")
-
-    output_path = summary_output_path(input_path)
-    tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
-    written = 0
-    with input_path.open(encoding="utf-8") as source, tmp_path.open("w", encoding="utf-8") as target:
-        for line_number, line in enumerate(source, start=1):
-            if not line.strip():
-                continue
-            row = json.loads(line)
-            if not isinstance(row, dict):
-                raise RuntimeError(f"{input_path}:{line_number} must contain a JSON object")
-            wikitext = row.get("wikitext")
-            if not isinstance(wikitext, str):
-                raise RuntimeError(f"{input_path}:{line_number} is missing string field wikitext")
-            row["summary_text"] = summarize_wikitext(wikitext)
-            target.write(json.dumps(row, ensure_ascii=False) + "\n")
-            written += 1
-    os.replace(tmp_path, output_path)
-    print(f"wrote {written} rows to {output_path}", file=sys.stderr)
 
 
 def extract_item_block(wikitext: str) -> str:
@@ -521,12 +493,14 @@ def page_record(page: dict) -> dict | None:
         return None
     revision = revisions[0]
     slot = revision.get("slots", {}).get("main", {})
+    wikitext = slot.get("content", "")
     return {
         "pageid": page.get("pageid"),
         "revid": revision.get("revid"),
         "timestamp": revision.get("timestamp"),
         "title": page.get("title"),
-        "wikitext": slot.get("content", ""),
+        "wikitext": wikitext,
+        "summary_text": summarize_wikitext(wikitext),
     }
 
 
@@ -605,12 +579,6 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Dump current PoE Wiki pages to JSONL.")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--resume", action="store_true", help="append from the saved cursor")
-    parser.add_argument(
-        "--summary-only",
-        type=Path,
-        metavar="FILE",
-        help="write FILE.summary.jsonl with summary_text added from existing wikitext",
-    )
     parser.add_argument("--sleep", type=float, default=1.0, help="seconds between API batches")
     parser.add_argument("--limit", type=int, default=None, help="stop after this many pages")
     return parser.parse_args()
@@ -618,13 +586,6 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    if args.summary_only is not None:
-        if args.resume:
-            raise RuntimeError("--summary-only cannot be combined with --resume")
-        if args.limit is not None:
-            raise RuntimeError("--summary-only cannot be combined with --limit")
-        add_summaries(args.summary_only)
-        return
     dump_pages(args.output, resume=args.resume, sleep_seconds=args.sleep, limit=args.limit)
 
 
