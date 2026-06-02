@@ -1,6 +1,7 @@
 # poewiki-dataset
 
-Tools for dumping current Path of Exile Wiki page wikitext into JSON Lines.
+Tools for dumping current Path of Exile Wiki page wikitext and plain-text
+summaries into JSON Lines.
 
 This repository is intended for the Python dump script. The generated wiki data
 belongs in a separate Hugging Face dataset repository, not in this GitHub code
@@ -35,6 +36,7 @@ Each line is a JSON object:
 | `timestamp` | string | Revision timestamp from the wiki API. |
 | `title` | string | Page title. |
 | `wikitext` | string | Raw MediaWiki wikitext for the page. |
+| `summary_text` | string | Plain-text summary extracted from the page wikitext. |
 
 ## Licensing
 
