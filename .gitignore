@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+
+.pytest_cache/
+
+data/*.jsonl
+data/*.jsonl.cursor
+data/*.jsonl.tmp
+
+hf-dataset/
